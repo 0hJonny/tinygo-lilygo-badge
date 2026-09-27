@@ -46,12 +46,6 @@ var (
 	errBadData  = errors.New("gt911: bad data (coordinates outside the resolution)")
 )
 
-// Recoverer is a bus that can re-initialize itself (for example, i2cfix.Bus).
-// If the bus implements it, the driver calls Recover when it gets clearly bad data.
-type Recoverer interface {
-	Recover()
-}
-
 // Device is a GT911 controller on an I2C bus.
 type Device struct {
 	bus     drivers.I2C
@@ -161,12 +155,10 @@ func (d *Device) ReadRaw() (x, y, size int, touched bool, err error) {
 			size = int(d.r[4]) | int(d.r[5])<<8
 			touched = true
 			// Coordinates outside the resolution indicate a bus failure that the bus did
-			// not detect (see i2cfix): an error, not a touch.
+			// not detect (see i2cfix): an error, not a touch. The bus is not reset here:
+			// a bus recovery was observed to make a healthy GT911 stop responding.
 			if d.xMax > 0 && d.yMax > 0 && (x >= int(d.xMax) || y >= int(d.yMax)) {
 				x, y, size, touched, err = 0, 0, 0, false, errBadData
-				if r, ok := d.bus.(Recoverer); ok {
-					r.Recover()
-				}
 				return
 			}
 		}

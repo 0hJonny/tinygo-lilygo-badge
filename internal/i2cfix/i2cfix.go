@@ -26,9 +26,11 @@
 // address+R (ack_en), READ n−1 (ACK), READ 1 (NACK, without ack_en, as in
 // i2c_master_read_static), STOP. The result is taken from the flags as in
 // i2c_isr_handler_default: TRANS_COMPLETE means success; NACK / TIME_OUT /
-// ARBITRATION_LOST mean an error. After an error it does what i2c_hw_fsm_reset()
-// does for S3 (no SOC_I2C_SUPPORT_HW_FSM_RST/HW_CLR_BUS): a software bus clear
-// (i2c_master_clear_bus) and a full re-initialization of the peripheral.
+// ARBITRATION_LOST mean an error. Error handling follows i2c_master_cmd_begin:
+// on TIME_OUT or ARBITRATION_LOST it does what i2c_hw_fsm_reset() does for S3
+// (no SOC_I2C_SUPPORT_HW_FSM_RST/HW_CLR_BUS): a software bus clear
+// (i2c_master_clear_bus) and a full re-initialization of the peripheral. On a
+// NACK it only counts, and resets after I2C_ACKERR_CNT_MAX (10) NACKs.
 //
 // Clock, timing and pin setup is done by machine.I2C.Configure.
 package i2cfix
@@ -74,6 +76,20 @@ var (
 // not set it. Default false.
 var ReadAckCheck bool
 
+// Diag is a snapshot of the controller taken when a transaction fails, before
+// the bus is recovered. It shows how far the transaction got.
+type Diag struct {
+	Cmds int    // number of commands in the transaction (COMD0…COMDn-1)
+	SR   uint32 // SR at the moment of the error (bit 4 = BUS_BUSY)
+	// BusyAtStart: SR.BUS_BUSY was set when this transaction started, i.e. the
+	// previous one did not release the bus (ESP-IDF resets the FSM in that case).
+	BusyAtStart bool
+	Done        uint8    // bit i set: command i was executed (COMDi done bit, bit 31)
+	IntRaw      uint32   // INT_RAW at the moment of the error
+	RxCount     int      // bytes in the RX FIFO (SR.RXFIFO_CNT)
+	Rx          [32]byte // the first RxCount bytes of the RX FIFO
+}
+
 // Bus implements drivers.I2C.
 type Bus struct {
 	i2c    *machine.I2C
@@ -82,7 +98,19 @@ type Bus struct {
 
 	// Errors counts failed transactions; Recoveries counts bus recoveries.
 	Errors, Recoveries int
+
+	// Last is the diagnostic snapshot of the last failed transaction.
+	Last Diag
+
+	// BusyStarts counts transactions that started with SR.BUS_BUSY set.
+	BusyStarts  int
+	busyAtStart bool
+
+	ackErrCnt int // clear_bus_cnt in i2c_master_cmd_begin
 }
+
+// ackErrCntMax is I2C_ACKERR_CNT_MAX in ESP-IDF driver/i2c.c.
+const ackErrCntMax = 10
 
 // New configures the bus. pullUp enables the internal SCL/SDA pull-ups (like
 // sda_pullup_en/scl_pullup_en in the original's i2c_config_t); TinyGo does not
@@ -107,6 +135,13 @@ func (b *Bus) Tx(addr uint16, w, r []byte) error {
 		return errTooLong
 	}
 	hw := b.i2c.Bus
+
+	// Record whether the bus is still busy from the previous transaction (IDF
+	// i2c_master_cmd_begin resets the FSM here if it is; not done yet, diagnostics only).
+	b.busyAtStart = hw.SR.Get()&esp.I2C_SR_BUS_BUSY != 0
+	if b.busyAtStart {
+		b.BusyStarts++
+	}
 
 	// Clean start: FIFO and flags (i2c_master_cmd_begin resets the FIFO).
 	hw.FIFO_CONF.SetBits(esp.I2C_FIFO_CONF_TX_FIFO_RST | esp.I2C_FIFO_CONF_RX_FIFO_RST)
@@ -156,10 +191,13 @@ func (b *Bus) Tx(addr uint16, w, r []byte) error {
 		raw := hw.INT_RAW.Get()
 		switch {
 		case raw&esp.I2C_INT_RAW_ARBITRATION_LOST_INT_RAW != 0:
+			b.capture(cmds, n)
 			return b.fail(errArbitration)
 		case raw&esp.I2C_INT_RAW_NACK_INT_RAW != 0:
-			return b.fail(errNACK)
+			b.capture(cmds, n)
+			return b.nack()
 		case raw&esp.I2C_INT_RAW_TIME_OUT_INT_RAW != 0:
+			b.capture(cmds, n)
 			return b.fail(errTimeout)
 		case raw&esp.I2C_INT_RAW_TRANS_COMPLETE_INT_RAW != 0:
 			for i := range r {
@@ -169,9 +207,26 @@ func (b *Bus) Tx(addr uint16, w, r []byte) error {
 			return nil
 		}
 		if time.Since(start) > txTimeout {
+			b.capture(cmds, n)
 			return b.fail(errTimeout)
 		}
 	}
+}
+
+// capture records Diag for the failed transaction (before recovery).
+func (b *Bus) capture(cmds *[numCmds]volatile.Register32, n int) {
+	hw := b.i2c.Bus
+	d := Diag{Cmds: n, IntRaw: hw.INT_RAW.Get(), SR: hw.SR.Get(), BusyAtStart: b.busyAtStart}
+	for i := 0; i < n; i++ {
+		if cmds[i].Get()&(1<<31) != 0 {
+			d.Done |= 1 << i
+		}
+	}
+	d.RxCount = int(hw.GetSR_RXFIFO_CNT())
+	for i := 0; i < d.RxCount && i < len(d.Rx); i++ {
+		d.Rx[i] = byte(hw.DATA.Get())
+	}
+	b.Last = d
 }
 
 // Recover clears the bus and re-initializes it (i2c_hw_fsm_reset for S3). Call
@@ -182,10 +237,32 @@ func (b *Bus) Recover() {
 	b.Recoveries++
 }
 
+// fail handles TIME_OUT and ARBITRATION_LOST: IDF maps both to
+// I2C_STATUS_TIMEOUT and calls i2c_hw_fsm_reset right away.
 func (b *Bus) fail(err error) error {
 	b.Errors++
+	b.ackErrCnt = 0
 	b.Recover()
 	return err
+}
+
+// nack handles I2C_STATUS_ACK_ERROR as IDF does: count, and reset the bus only
+// after ackErrCntMax NACKs (the counter is not cleared by a successful
+// transaction, as in IDF).
+func (b *Bus) nack() error {
+	b.Errors++
+	b.ackErrCnt++
+	if b.ackErrCnt >= ackErrCntMax {
+		b.ackErrCnt = 0
+		b.Recover()
+	}
+	return errNACK
+}
+
+// Reconfigure re-initializes the peripheral only (machine.I2C.Configure plus
+// the pull-ups), without the software bus clear. For diagnostics.
+func (b *Bus) Reconfigure() {
+	b.configure()
 }
 
 // clearBus is i2c_master_clear_bus(): if a device holds SDA (interrupted in the
