@@ -1,0 +1,28 @@
+/build/
+*.bin
+*.elf
+*.hex
+
+/test/idf-original-gray/build/
+/test/idf-original-gray/sdkconfig
+/test/idf-original-gray/sdkconfig.old
+/test/idf-original-gray/managed_components/
+/test/idf-original-gray/dependencies.lock
+
+__pycache__/
+
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+
+.claude/settings.local.json
+
+# Clone of the owner's ESP-IDF badge project (reference for the touch driver), a separate git repo
+/epd-lilygo-badge/
+
+# Private notes: porting log, plan, reports, assistant instructions
+docs/
+CLAUDE.md
+README.fix

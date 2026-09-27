@@ -1,0 +1,16 @@
+CONFIG_IDF_TARGET="esp32s3"
+
+# As in the environment where LilyGo tests the driver (Arduino-ESP32): 240 MHz
+# (busy_delay() in ed047tc1.c counts 240 cycles = 1 µs) and a 1 kHz FreeRTOS
+# tick (vTaskDelay(5) between frames in epd_draw_image = 5 ms).
+CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240=y
+CONFIG_FREERTOS_HZ=1000
+
+# Framebuffer (253 KB) in PSRAM, like ps_calloc() in the LilyGo examples.
+CONFIG_ESP32S3_SPIRAM_SUPPORT=y
+CONFIG_SPIRAM_MODE_OCT=y
+
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# printf through the built-in USB-Serial/JTAG (USB-C port), like println in TinyGo.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
