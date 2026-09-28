@@ -13,7 +13,6 @@ import (
 
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/epd"
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/gt911"
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cfix"
 )
 
 var display epd.Display // 253 KB framebuffer, so it is global
@@ -33,9 +32,9 @@ func main() {
 
 	// I2C as in i2c_bus_init() of the original: SCL IO17, SDA IO18, 400 kHz,
 	// internal pull-ups enabled (TinyGo does not enable them itself; the board has
-	// 10 kΩ + 10 kΩ to VDD3V3, N6/N7/N8). i2cfix does transactions as ESP-IDF does
-	// (see that package for the TinyGo I2C problems).
-	bus := i2cfix.New(machine.I2C0, machine.I2CConfig{SCL: machine.GPIO17, SDA: machine.GPIO18, Frequency: 400 * machine.KHz}, true)
+	// 10 kΩ + 10 kΩ to VDD3V3, N6/N7/N8). The bus implementation is chosen at build
+	// time (bus_*.go): i2cfix by default, machine.I2C0 with -tags stdi2c.
+	bus, busName := newBus(machine.I2CConfig{SCL: machine.GPIO17, SDA: machine.GPIO18, Frequency: 400 * machine.KHz})
 
 	tp := gt911.New(bus, machine.GPIO47)
 	tpErr := tp.Configure(gt911.Config{})
@@ -51,9 +50,10 @@ func main() {
 	}
 	id, _ := tp.ProductID()
 	xMax, yMax := tp.Resolution()
+	println("touch: I2C bus:", busName)
 	println("touch: GT911 address 0x" + strconv.FormatUint(uint64(tp.Address), 16) + " ID " + id)
 	println("touch: resolution", xMax, "x", yMax)
-	println("touch: I2C errors", bus.Errors, "recoveries", bus.Recoveries)
+	println("touch: I2C errors", busErrors(), "recoveries", busRecoveries())
 
 	display.ClearBuffer()
 	tinyfont.WriteLine(&display, &freesans.Bold18pt7b, 30, 60, "GT911 touch test", black)
@@ -70,7 +70,7 @@ func main() {
 	for end := time.Now().Add(30 * time.Second); time.Now().Before(end); {
 		rx, ry, _, touched, err := tp.ReadRaw()
 		if err != nil {
-			println("touch: error:", err.Error(), "(total errors", bus.Errors, "recoveries", bus.Recoveries, ")")
+			println("touch: error:", err.Error(), "(total errors", busErrors(), "recoveries", busRecoveries(), ")")
 		}
 		if touched && !pressed {
 			px, py := panelPoint(rx, ry)
@@ -101,7 +101,7 @@ func main() {
 			was = touched
 			time.Sleep(20 * time.Millisecond)
 		}
-		println("touch:", label, "- touches in 10 s:", n, "errors:", errs, "(I2C total", bus.Errors, "recoveries", bus.Recoveries, ")")
+		println("touch:", label, "- touches in 10 s:", n, "errors:", errs, "(I2C total", busErrors(), "recoveries", busRecoveries(), ")")
 	}
 	count("awake")
 	if err := tp.Sleep(); err != nil {

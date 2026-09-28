@@ -76,6 +76,11 @@ var (
 // not set it. Default false.
 var ReadAckCheck bool
 
+// NoRecover is for experiments only (cmd/i2ctiming): do not recover the bus
+// after an error, so that the controller state left by the error is observed
+// as is. Default false.
+var NoRecover bool
+
 // Diag is a snapshot of the controller taken when a transaction fails, before
 // the bus is recovered. It shows how far the transaction got.
 type Diag struct {
@@ -119,6 +124,13 @@ func New(i2c *machine.I2C, config machine.I2CConfig, pullUp bool) *Bus {
 	b := &Bus{i2c: i2c, config: config, pullUp: pullUp}
 	b.configure()
 	return b
+}
+
+// Wrap returns a Bus on an already configured machine.I2C without touching the
+// peripheral (no Configure). For diagnostics: comparing i2cfix and machine.I2C
+// transactions on the same controller state.
+func Wrap(i2c *machine.I2C, config machine.I2CConfig, pullUp bool) *Bus {
+	return &Bus{i2c: i2c, config: config, pullUp: pullUp}
 }
 
 func (b *Bus) configure() {
@@ -232,6 +244,9 @@ func (b *Bus) capture(cmds *[numCmds]volatile.Register32, n int) {
 // Recover clears the bus and re-initializes it (i2c_hw_fsm_reset for S3). Call
 // it when a device driver gets clearly bad data.
 func (b *Bus) Recover() {
+	if NoRecover {
+		return
+	}
 	b.clearBus()
 	b.configure()
 	b.Recoveries++
@@ -263,6 +278,13 @@ func (b *Bus) nack() error {
 // the pull-ups), without the software bus clear. For diagnostics.
 func (b *Bus) Reconfigure() {
 	b.configure()
+}
+
+// ClearBus runs the software bus clear only (9 clocks while SDA is low, then a
+// STOP). The pins are left as GPIOs: call Reconfigure afterwards. For
+// diagnostics.
+func (b *Bus) ClearBus() {
+	b.clearBus()
 }
 
 // clearBus is i2c_master_clear_bus(): if a device holds SDA (interrupted in the
