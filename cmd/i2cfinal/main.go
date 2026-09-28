@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	cfg     = machine.I2CConfig{SCL: machine.GPIO17, SDA: machine.GPIO18, Frequency: 400 * machine.KHz}
+	cfg     = machine.I2CConfig{SCL: machine.GPIO17, SDA: machine.GPIO18, Frequency: busFreq}
 	i2c     = machine.I2C0
 	pid     = []byte{0x81, 0x40}
 	gtCfg   = []byte{0x80, 0x47}
@@ -41,6 +41,13 @@ func hexBytes(buf []byte) string {
 		h += string([]byte{hexd[b>>4], hexd[b&15]}) + " "
 	}
 	return h
+}
+
+func errStr(err error) string {
+	if err == nil {
+		return "nil"
+	}
+	return err.Error()
 }
 
 func configure() {
@@ -98,7 +105,7 @@ func main() {
 	time.Sleep(70 * time.Millisecond)
 	intPin.Configure(machine.PinConfig{Mode: machine.PinInput})
 
-	println("=== i2cfinal: machine.I2C0 with the esp32xx-i2c-fix branch ===")
+	println("=== i2cfinal: machine.I2C0 with the esp32xx-i2c-fix branch, bus", busFreq/1000, "kHz ===")
 	id := []byte{'9', '1', '1', 0}
 	configure()
 
@@ -167,9 +174,15 @@ func main() {
 		}
 		if b, err := readPCF(); err != nil || string(b) != string(pcf) {
 			ePCF++
+			if ePCF <= 3 {
+				println("     PCF8563 bad, cycle", i, "| err:", errStr(err), "| data:", hexBytes(b), "| reference:", hexBytes(pcf))
+			}
 		}
 		if b, err := readPID(); err != nil || string(b) != string(id) {
 			eGT++
+			if eGT <= 3 {
+				println("     GT911 bad, cycle", i, "| err:", errStr(err), "| data:", hexBytes(b))
+			}
 		}
 	}
 	println("     0x42 without error:", e42, "| PCF8563 bad:", ePCF, "| GT911 bad:", eGT)
