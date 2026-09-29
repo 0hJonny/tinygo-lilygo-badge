@@ -21,8 +21,8 @@ import (
 	"machine"
 	"time"
 
+	"github.com/0hJonny/tinygo-lilygo-badge/i2cidf"
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/epd"
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cidf"
 )
 
 var (

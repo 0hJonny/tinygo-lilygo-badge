@@ -7,7 +7,7 @@ import (
 
 	"tinygo.org/x/drivers"
 
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cidf"
+	"github.com/0hJonny/tinygo-lilygo-badge/i2cidf"
 )
 
 var idfBus *i2cidf.Bus

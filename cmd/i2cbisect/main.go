@@ -1,4 +1,4 @@
-// Test: which difference between the ESP-IDF v4.4.8 I2C driver (internal/i2cidf,
+// Test: which difference between the ESP-IDF v4.4.8 I2C driver (i2cidf,
 // works on this board) and machine.I2C of TinyGo 0.42.0 breaks the bus.
 //
 // Every variant starts from a reset I2C module (i2cidf.ResetModule) and runs
@@ -30,8 +30,8 @@ import (
 	"machine"
 	"time"
 
+	"github.com/0hJonny/tinygo-lilygo-badge/i2cidf"
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/epd"
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cidf"
 )
 
 const (

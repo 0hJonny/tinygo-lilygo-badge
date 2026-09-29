@@ -1,4 +1,4 @@
-// Test of internal/i2cidf, the ESP-IDF v4.4.8 I2C master driver ported as is:
+// Test of i2cidf, the ESP-IDF v4.4.8 I2C master driver ported as is:
 // the same situations in which machine.I2C / i2cfix failed on this board.
 //
 //	S  GT911 as the very first transaction after initialization, then PCF8563
@@ -20,8 +20,8 @@ import (
 	"machine"
 	"time"
 
+	"github.com/0hJonny/tinygo-lilygo-badge/i2cidf"
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/epd"
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cidf"
 )
 
 const (

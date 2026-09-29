@@ -16,7 +16,7 @@
 //     (register 0x00, 2 bytes).
 //  5. Second PCF8563 read.
 //
-// Variants A, B, C use machine.I2C0; D uses internal/i2cidf (ESP-IDF v4.4.8
+// Variants A, B, C use machine.I2C0; D uses i2cidf (ESP-IDF v4.4.8
 // port) and counts i2c_hw_fsm_reset during each read. 10 cases per variant,
 // at 400 kHz and 100 kHz. Three builds (run1, run2, run3) differ only in the
 // order of the variants and speeds.
@@ -30,8 +30,8 @@ import (
 	"machine"
 	"time"
 
+	"github.com/0hJonny/tinygo-lilygo-badge/i2cidf"
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/epd"
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cidf"
 )
 
 const reps = 10

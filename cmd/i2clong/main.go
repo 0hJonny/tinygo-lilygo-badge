@@ -6,7 +6,7 @@
 // to see whether the bus survived.
 //
 // The same binary is built with two TinyGo trees (the header says which), and
-// at the end the same reads go through internal/i2cidf (the ESP-IDF v4.4.8
+// at the end the same reads go through i2cidf (the ESP-IDF v4.4.8
 // driver port) as a reference.
 //
 // Run it right after a full power cycle (USB and battery disconnected).
@@ -17,8 +17,8 @@ import (
 	"machine"
 	"time"
 
+	"github.com/0hJonny/tinygo-lilygo-badge/i2cidf"
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/epd"
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cidf"
 )
 
 var (

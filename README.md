@@ -33,6 +33,7 @@ internal/epd          panel driver: power (74HCT4094), CKV timing, LCD_CAM + GDM
 internal/epd/raster   hardware-independent frame generator + host tests against the original C code
 internal/gt911        GT911 touch driver (implements touch.Pointer)
 internal/i2cfix       ESP-IDF-style I2C transactions for ESP32-S3 (works around a TinyGo I2C issue)
+i2cidf                ESP-IDF v4.4.8 I2C master driver for ESP32-S3, ported to Go (importable)
 cmd/                  test programs: hello, clear, gray, area, contrast, touch, i2cbug, cfgprobe
 test/idf-original-gray  reference ESP-IDF 4.4 project: the same test through the original C driver
 ```
@@ -71,6 +72,25 @@ func main() {
 }
 ```
 
+## i2cidf
+
+`i2cidf` is the I2C master driver of ESP-IDF v4.4.8 for ESP32-S3, ported to Go at register level (polling instead of the interrupt handler). It does not use `machine.I2C`. Each ported function links to the ESP-IDF lines it follows; the package comment lists the differences. It can be used without cloning this repository:
+
+```sh
+go get github.com/0hJonny/tinygo-lilygo-badge/i2cidf
+```
+
+```go
+bus := i2cidf.New(i2cidf.Config{
+	SDA: machine.GPIO18, SCL: machine.GPIO17,
+	SDAPullup: true, SCLPullup: true,
+	ClkSpeed: 400000,
+})
+err := bus.Tx(0x51, []byte{0x00}, buf) // implements drivers.I2C
+```
+
+Only for ESP32-S3 (`tinygo && esp32s3`) and only I2C0.
+
 ## Notes and known issues
 
 - **Panel power on rev V2.4.** On this revision the panel high voltage is switched only by the 74HCT4094 output that the original driver calls `ep_scan_direction` (PWR_EN in the schematic). The original `epd_poweroff()` leaves it on. `epd.PowerOff()` clears the whole register.
@@ -88,8 +108,8 @@ Different parts of the repository use different licenses:
 |---|---|---|
 | `internal/epd/` (incl. `raster/`) | **GPL-3.0-only**, see [internal/epd/LICENSE](internal/epd/LICENSE) | a port of LilyGo-EPD47, which is GPL-3.0 |
 | `test/idf-original-gray/components/epd_driver/` | **GPL-3.0**, see its [LICENSE](test/idf-original-gray/components/epd_driver/LICENSE) | a copy of the original driver (plus one `#include <math.h>` for ESP-IDF 4.4), used only for tests |
-| everything else (`internal/gt911`, `internal/i2cfix`, `cmd/`, the reference test program) | **MIT**, see [LICENSE](LICENSE) | original code |
+| everything else (`i2cidf`, `internal/gt911`, `internal/i2cfix`, `cmd/`, the reference test program) | **MIT**, see [LICENSE](LICENSE) | original code |
 
-`internal/epd/lcd.go` and `internal/i2cfix` follow register sequences from ESP-IDF (Copyright Espressif Systems, Apache-2.0, see [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)).
+`internal/epd/lcd.go` and `internal/i2cfix` follow register sequences from ESP-IDF, and `i2cidf` is a port of the ESP-IDF I2C driver (Copyright Espressif Systems, Apache-2.0, see [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt)).
 
 Firmware that imports `internal/epd` (for example the programs in `cmd/`) is a combined work under GPL-3.0 when distributed. The MIT-licensed packages can be used on their own without that restriction.

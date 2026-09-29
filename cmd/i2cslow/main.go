@@ -5,7 +5,7 @@
 // For machine.I2C0 (PR branch) at 100 and 400 kHz: 20 cycles of
 // "read 0x42, pause, read PCF8563" for pauses 0, 20 us, 100 us, 1 ms. SR is
 // read right before the PCF8563 read (BUS_BUSY, and SCL_MAIN_STATE_LAST).
-// Then the same with pause 0 through internal/i2cidf (ESP-IDF v4.4.8 port) at
+// Then the same with pause 0 through i2cidf (ESP-IDF v4.4.8 port) at
 // 100 kHz, counting i2c_hw_fsm_reset.
 //
 // Run it right after a full power cycle (USB and battery disconnected).
@@ -16,8 +16,8 @@ import (
 	"machine"
 	"time"
 
+	"github.com/0hJonny/tinygo-lilygo-badge/i2cidf"
 	"github.com/0hJonny/tinygo-lilygo-badge/internal/epd"
-	"github.com/0hJonny/tinygo-lilygo-badge/internal/i2cidf"
 )
 
 type txer interface {
